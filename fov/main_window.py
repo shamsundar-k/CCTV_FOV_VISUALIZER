@@ -73,7 +73,7 @@ class MainWindow(QMainWindow):
                 background:{TH('panel')}; color:{TH('text')};
                 border:1px solid {TH('border')}; border-bottom:none;
                 border-radius:4px 4px 0 0;
-                padding:6px 24px; font-size:10px; font-weight:bold;
+                padding:6px 24px; font-size:11px; font-weight:bold;
             }}
             QTabBar::tab:selected {{
                 background:{TH('accent')}; color:#ffffff;
@@ -86,7 +86,7 @@ class MainWindow(QMainWindow):
     def _theme_btn_style(self):
         return (f"QPushButton{{background:{TH('accent')};color:#ffffff;"
                 f"border:none;border-radius:4px;padding:4px 12px;"
-                f"font-size:10px;font-weight:bold;}}"
+                f"font-size:11px;font-weight:bold;}}"
                 f"QPushButton:hover{{background:{TH('accent2')};}}")
 
     def _toggle_theme(self):

@@ -23,7 +23,7 @@ class ControlPanel(QWidget):
         self._build()
 
     def _build(self):
-        self.setFixedWidth(295)
+        self.setFixedWidth(310)
         ll = QVBoxLayout(self)
         ll.setContentsMargins(6, 6, 6, 6)
         ll.setSpacing(6)
@@ -55,13 +55,13 @@ class ControlPanel(QWidget):
             ("bearing", "Bearing",          0,  359,   0, "°",   1),
         ]
         for row, (key, label, lo, hi, default, unit, div) in enumerate(params):
-            lbl = QLabel(label); lbl.setFont(QFont("Arial", 9, QFont.Bold))
+            lbl = QLabel(label); lbl.setFont(QFont("Arial", 10, QFont.Bold))
             sg.addWidget(lbl, row*2, 0, 1, 2)
             sl = QSlider(Qt.Horizontal)
             sl.setMinimum(lo); sl.setMaximum(hi); sl.setValue(default)
             vl = QLabel(f"{default/div:.1f} {unit}")
-            vl.setFixedWidth(58); vl.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
-            vl.setFont(QFont("Courier", 9))
+            vl.setFixedWidth(65); vl.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
+            vl.setFont(QFont("Courier", 10))
             sl.valueChanged.connect(
                 lambda v, vl=vl, u=unit, d=div: (
                     vl.setText(f"{v/d:.1f} {u}"), self._cb()))
@@ -77,6 +77,7 @@ class ControlPanel(QWidget):
             ("D_near",  "D_near"), ("D_far",  "D_far"), ("render_far", "Render far"),
             ("W_near",  "W_near"), ("W_far",  "W_far"), ("area",       "Coverage"),
             ("sep", None),
+            ("blind",   "Blind Zone"),
             ("d_ident", "Identification"), ("d_recog", "Recognition"),
             ("d_obs",   "Observation"),    ("d_det",   "Detection"),
         ]
@@ -87,8 +88,8 @@ class ControlPanel(QWidget):
                 sep = QFrame(); sep.setFrameShape(QFrame.HLine)
                 sep.setStyleSheet(f"color:{TH('sep')};")
                 stg.addWidget(sep, r, 0, 1, 2); continue
-            lbl = QLabel(label+":"); lbl.setFont(QFont("Arial", 8))
-            val = QLabel("—"); val.setFont(QFont("Courier", 9, QFont.Bold))
+            lbl = QLabel(label+":"); lbl.setFont(QFont("Arial", 9))
+            val = QLabel("—"); val.setFont(QFont("Courier", 10, QFont.Bold))
             val.setAlignment(Qt.AlignRight)
             if key in dm:
                 val.setStyleSheet(f"color:{DORI_HEX[dm[key]]};font-weight:bold;")
@@ -109,11 +110,11 @@ class ControlPanel(QWidget):
         ll.addWidget(lgb)
 
         hint = QLabel("3D: L-drag rotate · R-drag zoom\nM-drag pan · Scroll zoom")
-        hint.setStyleSheet(f"color:{TH('text2')};font-size:8px;")
+        hint.setStyleSheet(f"color:{TH('text2')};font-size:9px;")
         ll.addWidget(hint)
 
         self._warn_lbl = QLabel("")
-        self._warn_lbl.setStyleSheet(f"color:{TH('warn')};font-size:8px;font-weight:bold;")
+        self._warn_lbl.setStyleSheet(f"color:{TH('warn')};font-size:9px;font-weight:bold;")
         self._warn_lbl.setWordWrap(True)
         ll.addWidget(self._warn_lbl)
         ll.addStretch()
@@ -130,7 +131,7 @@ class ControlPanel(QWidget):
         for child in self.findChildren(QPushButton):
             child.setStyleSheet(self._btn_style())
         self._warn_lbl.setStyleSheet(
-            f"color:{TH('warn')};font-size:8px;font-weight:bold;")
+            f"color:{TH('warn')};font-size:9px;font-weight:bold;")
         self.update()
 
     def refresh_focal_slider(self):
@@ -187,6 +188,7 @@ class ControlPanel(QWidget):
         self._stats["W_near"].setText(    f"{geo['W_near']:.2f} m")
         self._stats["W_far"].setText(     f"{geo['W_render']:.2f} m")
         self._stats["area"].setText(      f"{geo['area']:.1f} m²")
+        self._stats["blind"].setText(     f"{geo['D_near']:.2f} m")
         km = {"d_ident": "Identification", "d_recog": "Recognition",
               "d_obs":   "Observation",    "d_det":   "Detection"}
         for sk, lv in km.items():
@@ -196,7 +198,7 @@ class ControlPanel(QWidget):
     def _gs(self):
         return f"""
         QGroupBox {{
-            color:{TH('text')}; font-weight:bold; font-size:10px;
+            color:{TH('text')}; font-weight:bold; font-size:11px;
             border:1px solid {TH('border')}; border-radius:5px;
             margin-top:8px; padding-top:6px;
             background:{TH('bg2')};
@@ -205,7 +207,7 @@ class ControlPanel(QWidget):
             subcontrol-origin:margin; left:8px; padding:0 4px;
             background:{TH('bg2')};
         }}
-        QLabel {{ color:{TH('text2')}; font-size:9px; }}
+        QLabel {{ color:{TH('text2')}; font-size:10px; }}
         QSlider::groove:horizontal {{
             height:4px; background:{TH('border')}; border-radius:2px;
         }}
@@ -223,7 +225,7 @@ class ControlPanel(QWidget):
         QPushButton {{
             background:{TH('accent')}; color:#ffffff;
             border:none; border-radius:4px;
-            padding:5px 10px; font-size:9px; font-weight:bold;
+            padding:5px 10px; font-size:10px; font-weight:bold;
         }}
         QPushButton:hover {{ background:{TH('accent2')}; }}
         QPushButton:pressed {{ background:{TH('accent')}; }}
