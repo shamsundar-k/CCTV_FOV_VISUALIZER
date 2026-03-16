@@ -73,8 +73,9 @@ def compute_geometry(f, H, target_dist, target_h, model):
         return None, (f"⚠ Computed tilt ({tilt:.1f}°) ≤ V_angle/2 ({V_angle/2:.1f}°). "
                       f"Increase target distance or reduce target height.")
 
-    D_near     = H / math.tan(theta + half_v)
-    D_far      = H / math.tan(theta - half_v)
+    tan_near = math.tan(theta + half_v)
+    D_near   = H / tan_near if abs(tan_near) > 1e-6 else float('inf')
+    D_far    = H / math.tan(theta - half_v)
     render_far = min(D_far, target_dist)
 
     if D_near > target_dist:

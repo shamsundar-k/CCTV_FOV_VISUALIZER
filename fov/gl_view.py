@@ -2,6 +2,7 @@ import math
 
 from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QFont, QColor, QPainter
+from PySide6.QtWidgets import QFileDialog
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective, gluLookAt, gluProject
@@ -29,6 +30,108 @@ class GLView(QOpenGLWidget):
         self.bearing      = bearing
         geo["bearing"]    = bearing
         self.update()
+
+    def save_image(self, parent=None, geo=None, model=None):
+        if not self.geo:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            parent, "Save 3D View", "fov_3d.png", "PNG Image (*.png)")
+        if not path:
+            return
+        img = self.grabFramebuffer()
+        geo  = geo  or self.geo
+        if geo and model:
+            self._paint_overlay(img, geo, model)
+        img.save(path, "PNG")
+
+    def _paint_overlay(self, img, geo, model):
+        from .constants import DORI_HEX
+
+        p = QPainter(img)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        lines = []  # (text, hex_colour or None)
+
+        # ── Camera model ──────────────────────────────────────────────
+        lines.append((model["name"], None))
+        lines.append((f"f = {geo['f']:.1f} mm", None))
+        lines.append((f"H-FOV: {geo['H_angle']:.1f}°   V-FOV: {geo['V_angle']:.1f}°", None))
+        lines.append(("", None))  # spacer
+
+        # ── Installation ──────────────────────────────────────────────
+        lines.append(("INSTALLATION", None))
+        lines.append((f"Height:        {geo['H']:.1f} m", None))
+        lines.append((f"Target dist:   {geo['target_dist']:.1f} m", None))
+        lines.append((f"Target height: {geo['target_h']:.1f} m", None))
+        bearing = geo.get("bearing", 0.0)
+        lines.append((f"Bearing:       {bearing:.0f}°", None))
+        lines.append(("", None))
+
+        # ── Computed geometry ─────────────────────────────────────────
+        lines.append(("GEOMETRY", None))
+        lines.append((f"Tilt (calc):   {geo['tilt']:.1f}°", None))
+        lines.append((f"D_near:        {geo['D_near']:.2f} m", None))
+        lines.append((f"D_far:         {geo['D_far']:.2f} m", None))
+        lines.append((f"Render far:    {geo['render_far']:.2f} m", None))
+        lines.append((f"W_near:        {geo['W_near']:.2f} m", None))
+        lines.append((f"W_far:         {geo['W_render']:.2f} m", None))
+        lines.append((f"Coverage:      {geo['area']:.1f} m²", None))
+        lines.append((f"Blind zone:    {geo['D_near']:.2f} m", None))
+        lines.append(("", None))
+
+        # ── DORI distances ────────────────────────────────────────────
+        lines.append(("DORI DISTANCES", None))
+        dori_order = [
+            ("Identification", "d_ident"),
+            ("Recognition",    "d_recog"),
+            ("Observation",    "d_obs"),
+            ("Detection",      "d_det"),
+        ]
+        for level, _ in dori_order:
+            info = geo["dori"][level]
+            sfx  = "" if info["within_render"] else " ⚠"
+            lines.append((f"{level:<16} {info['D_effective']:.1f} m{sfx}",
+                          DORI_HEX[level]))
+
+        # ── Measure panel geometry ────────────────────────────────────
+        font_hdr  = QFont("Arial", 9, QFont.Bold)
+        font_body = QFont("Courier", 9)
+
+        p.setFont(font_body)
+        fm       = p.fontMetrics()
+        lh       = fm.height() + 2
+        max_w    = max(fm.horizontalAdvance(t) for t, _ in lines if t) + 20
+        pad      = 10
+        panel_w  = max_w + pad * 2
+        panel_h  = lh * len(lines) + pad * 2
+
+        # Semi-transparent dark background
+        bg = QColor(15, 15, 25, 210)
+        p.setBrush(bg); p.setPen(Qt.NoPen)
+        p.drawRoundedRect(pad, pad, panel_w, panel_h, 6, 6)
+
+        # Draw lines
+        x  = pad * 2
+        y  = pad + lh
+        for text, colour in lines:
+            if not text:
+                y += lh // 2
+                continue
+            # Section headers (ALL CAPS, no colour override)
+            if text.isupper():
+                p.setFont(font_hdr)
+                p.setPen(QColor("#aabbcc"))
+                p.drawText(x, y, text)
+                p.setFont(font_body)
+            elif colour:
+                p.setPen(QColor(colour))
+                p.drawText(x, y, text)
+            else:
+                p.setPen(QColor("#e8eaf0"))
+                p.drawText(x, y, text)
+            y += lh
+
+        p.end()
 
     def mousePressEvent(self, e): self._last = e.position().toPoint()
     def mouseMoveEvent(self, e):

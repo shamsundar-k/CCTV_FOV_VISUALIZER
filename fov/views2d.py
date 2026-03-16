@@ -1,10 +1,9 @@
 import math
 
-from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QWidget, QFileDialog
 from PySide6.QtCore import Qt, QPointF
-from PySide6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QPolygonF
+from PySide6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QPolygonF, QPixmap
 
-from . import theme as _theme
 from .theme import TH
 from .constants import DORI_HEX, BLIND_SPOT_HEX, BLIND_SPOT_RGBA
 
@@ -18,6 +17,113 @@ class Views2D(QWidget):
     def set_geometry(self, geo):
         self.geo = geo
         self.update()
+
+    def save_image(self, parent=None, geo=None, model=None):
+        if not self.geo:
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            parent, "Save 2D View", "fov_2d.png", "PNG Image (*.png)")
+        if not path:
+            return
+        view_px = self.grab()
+        geo = geo or self.geo
+        if geo and model:
+            composite = self._build_composite(view_px, geo, model)
+            composite.save(path, "PNG")
+        else:
+            view_px.save(path, "PNG")
+
+    def _build_composite(self, view_px, geo, model):
+        lines = self._report_lines(geo, model)
+
+        font_hdr  = QFont("Arial", 9, QFont.Bold)
+        font_body = QFont("Courier", 9)
+
+        # Measure panel width using a temporary painter on the view pixmap
+        tmp = QPainter(view_px)
+        tmp.setFont(font_body)
+        fm    = tmp.fontMetrics()
+        lh    = fm.height() + 2
+        max_w = max(fm.horizontalAdvance(t) for t, _ in lines if t)
+        tmp.end()
+
+        pad     = 14
+        panel_w = max_w + pad * 3
+        vh      = view_px.height()
+        vw      = view_px.width()
+
+        # Build composite: panel on left, view on right
+        out = QPixmap(panel_w + vw, vh)
+        out.fill(QColor("#f4f6f8"))
+
+        p = QPainter(out)
+        p.setRenderHint(QPainter.Antialiasing)
+
+        # Divider line between panel and view
+        p.setPen(QPen(QColor("#c8d0da"), 1))
+        p.drawLine(panel_w - 1, 0, panel_w - 1, vh)
+
+        # Paste the view on the right
+        p.drawPixmap(panel_w, 0, view_px)
+
+        # Draw text lines in the panel
+        x = pad
+        y = pad + lh
+        for text, colour in lines:
+            if not text:
+                y += lh // 2
+                continue
+            if text.isupper():
+                p.setFont(font_hdr)
+                p.setPen(QColor("#445566"))
+                p.drawText(x, y, text)
+                p.setFont(font_body)
+            elif colour:
+                c = QColor(colour)
+                c.setHsv(c.hsvHue(), min(255, c.hsvSaturation() + 30),
+                         max(0, c.value() - 40))
+                p.setPen(c)
+                p.drawText(x, y, text)
+            else:
+                p.setPen(QColor("#1a2030"))
+                p.drawText(x, y, text)
+            y += lh
+
+        p.end()
+        return out
+
+    def _report_lines(self, geo, model):
+        lines = []
+        lines.append((model["name"], None))
+        lines.append((f"f = {geo['f']:.1f} mm", None))
+        lines.append((f"H-FOV: {geo['H_angle']:.1f}°  V-FOV: {geo['V_angle']:.1f}°", None))
+        lines.append(("", None))
+
+        lines.append(("INSTALLATION", None))
+        lines.append((f"Height:      {geo['H']:.1f} m", None))
+        lines.append((f"Target dist: {geo['target_dist']:.1f} m", None))
+        lines.append((f"Target h:    {geo['target_h']:.1f} m", None))
+        lines.append((f"Bearing:     {geo.get('bearing', 0.0):.0f}°", None))
+        lines.append(("", None))
+
+        lines.append(("GEOMETRY", None))
+        lines.append((f"Tilt:        {geo['tilt']:.1f}°", None))
+        lines.append((f"D_near:      {geo['D_near']:.2f} m", None))
+        lines.append((f"D_far:       {geo['D_far']:.2f} m", None))
+        lines.append((f"Render far:  {geo['render_far']:.2f} m", None))
+        lines.append((f"W_near:      {geo['W_near']:.2f} m", None))
+        lines.append((f"W_far:       {geo['W_render']:.2f} m", None))
+        lines.append((f"Coverage:    {geo['area']:.1f} m²", None))
+        lines.append((f"Blind zone:  {geo['D_near']:.2f} m", None))
+        lines.append(("", None))
+
+        lines.append(("DORI DISTANCES", None))
+        for level in ("Identification", "Recognition", "Observation", "Detection"):
+            info = geo["dori"][level]
+            sfx  = "" if info["within_render"] else " ⚠"
+            lines.append((f"{level:<16} {info['D_effective']:.1f} m{sfx}",
+                          DORI_HEX[level]))
+        return lines
 
     def _draw_label(self, p, x, y, text, text_col, font_size=8, bold=True):
         """Text with solid background pill for maximum legibility."""
@@ -119,7 +225,7 @@ class Views2D(QWidget):
             di2 = max(di, D_near); do2 = min(do, rf)
             if do2 <= di2+0.01: continue
             col = QColor(DORI_HEX[level])
-            col.setAlpha(130 if not _theme.DARK_MODE else 110)
+            col.setAlpha(130)
             pts = [QPointF(wx(di2), wy(max(top_ray(di2), 0))),
                    QPointF(wx(do2), wy(max(top_ray(do2), 0))),
                    QPointF(wx(do2), wy(bot_ray(do2))),
@@ -275,7 +381,7 @@ class Views2D(QWidget):
             di2 = max(di, D_near); do2 = min(do, rf)
             if do2 <= di2+0.01: continue
             th = math.tan(hh); col = QColor(DORI_HEX[level])
-            col.setAlpha(130 if not _theme.DARK_MODE else 120)
+            col.setAlpha(130)
             p1x, p1y = w2p(di2, -di2*th); p2x, p2y = w2p(di2,  di2*th)
             p3x, p3y = w2p(do2,  do2*th); p4x, p4y = w2p(do2, -do2*th)
             poly = QPolygonF([QPointF(p1x, p1y), QPointF(p2x, p2y),

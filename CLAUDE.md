@@ -22,7 +22,7 @@ uv run python main.py
 
 ```
 fov/
-├── theme.py          # DARK_MODE global, _LIGHT/_DARK dicts, TH() accessor
+├── theme.py          # _LIGHT dict, TH() accessor
 ├── constants.py      # SENSOR_FORMATS, ASPECT_RATIOS, CAMERA_MODEL, DORI_* tables
 ├── geometry.py       # Pure-math FOV/geometry functions
 ├── dialogs.py        # CameraParamsDialog (QDialog)
@@ -48,14 +48,13 @@ main.py               # Entry point
 
 ### Mutable globals and import rules
 
-There are two mutable module-level globals:
+There is one mutable module-level global:
 
 | Global | Module | Type | Pattern |
 |---|---|---|---|
-| `DARK_MODE` | `fov.theme` | `bool` (rebound on toggle) | Always access as `theme.DARK_MODE` via module ref |
 | `CAMERA_MODEL` | `fov.constants` | `dict` (mutated in place) | `from .constants import CAMERA_MODEL` then `.update()` is safe |
 
-**Critical:** `DARK_MODE` is a scalar that gets rebound (`theme.DARK_MODE = not theme.DARK_MODE` in `MainWindow._toggle_theme`). Any module that does `from fov.theme import DARK_MODE` will hold a stale reference after the toggle. The two places in `views2d.py` that read `DARK_MODE` directly use `_theme.DARK_MODE` (module-attribute lookup) to stay live. `TH()` is always safe to import by name because it re-reads `DARK_MODE` from its own module globals at call time.
+`TH()` in `fov/theme.py` always returns the single light theme dict; it is safe to import by name.
 
 ### Adding a new view or feature
 

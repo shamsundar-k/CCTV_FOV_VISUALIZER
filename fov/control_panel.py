@@ -7,7 +7,7 @@ from PySide6.QtGui import QFont
 
 from .theme import TH
 from .constants import CAMERA_MODEL, DORI_THRESHOLDS, DORI_HEX
-from .geometry import fov_from_sensor
+from .geometry import fov_from_sensor, interpolate_angles
 
 
 class ControlPanel(QWidget):
@@ -49,7 +49,7 @@ class ControlPanel(QWidget):
             ("focal",   "Focal Length",
              int(CAMERA_MODEL["f_min"]*10), int(CAMERA_MODEL["f_max"]*10),
              60,  "mm", 10),
-            ("height",  "Install Height",  10, 150,  40, "m",  10),
+            ("height",  "Install Height",  10, 400,  40, "m",  10),
             ("tgt_d",   "Target Distance",  5, 1500, 300, "m",  10),
             ("tgt_h",   "Target Height",    0,   30,  18, "m",  10),
             ("bearing", "Bearing",          0,  359,   0, "°",   1),
@@ -59,12 +59,25 @@ class ControlPanel(QWidget):
             sg.addWidget(lbl, row*2, 0, 1, 2)
             sl = QSlider(Qt.Horizontal)
             sl.setMinimum(lo); sl.setMaximum(hi); sl.setValue(default)
-            vl = QLabel(f"{default/div:.1f} {unit}")
-            vl.setFixedWidth(65); vl.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
+            if key == "focal":
+                ha0 = interpolate_angles(default / div, CAMERA_MODEL)[0]
+                vl = QLabel(f"{default/div:.1f} {unit}  H:{ha0:.0f}°")
+                vl.setFixedWidth(110)
+            else:
+                vl = QLabel(f"{default/div:.1f} {unit}")
+                vl.setFixedWidth(65)
+            vl.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
             vl.setFont(QFont("Courier", 10))
-            sl.valueChanged.connect(
-                lambda v, vl=vl, u=unit, d=div: (
-                    vl.setText(f"{v/d:.1f} {u}"), self._cb()))
+            if key == "focal":
+                sl.valueChanged.connect(
+                    lambda v, vl=vl, u=unit, d=div: (
+                        vl.setText(
+                            f"{v/d:.1f} {u}  H:{interpolate_angles(v/d, CAMERA_MODEL)[0]:.0f}°"
+                        ), self._cb()))
+            else:
+                sl.valueChanged.connect(
+                    lambda v, vl=vl, u=unit, d=div: (
+                        vl.setText(f"{v/d:.1f} {u}"), self._cb()))
             sg.addWidget(sl, row*2+1, 0); sg.addWidget(vl, row*2+1, 1)
             self._sliders[key] = sl; self._vl[key] = vl
         ll.addWidget(sb)
@@ -133,6 +146,13 @@ class ControlPanel(QWidget):
         self._warn_lbl.setStyleSheet(
             f"color:{TH('warn')};font-size:9px;font-weight:bold;")
         self.update()
+
+    def refresh_fov_label(self):
+        sl = self._sliders["focal"]
+        vl = self._vl["focal"]
+        f  = sl.value() / 10
+        ha = interpolate_angles(f, CAMERA_MODEL)[0]
+        vl.setText(f"{f:.1f} mm  H:{ha:.0f}°")
 
     def refresh_focal_slider(self):
         sl = self._sliders["focal"]

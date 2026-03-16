@@ -4,6 +4,11 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.0",
+]
 dependencies = [
     "numpy>=2.4.3",
     "pyopengl>=3.1.10",

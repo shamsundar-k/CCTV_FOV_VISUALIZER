@@ -1,11 +1,12 @@
+import json
+
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QTabWidget, QPushButton, QDialog,
+    QApplication, QMainWindow, QWidget, QHBoxLayout,
+    QTabWidget, QDialog, QFileDialog,
 )
-from PySide6.QtCore import Qt, QTimer  # Qt still used for PointingHandCursor
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QColor, QPalette
 
-from . import theme as _theme
 from .theme import TH
 from .constants import CAMERA_MODEL
 from .geometry import compute_geometry
@@ -32,25 +33,11 @@ class MainWindow(QMainWindow):
         root.setContentsMargins(4, 4, 4, 4)
         root.setSpacing(4)
 
-        # Left column: theme button on top + control panel below
-        left_col = QWidget()
-        left_layout = QVBoxLayout(left_col)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setSpacing(4)
-
-        self._theme_btn = QPushButton("🌙  Dark Mode")
-        self._theme_btn.setFixedHeight(30)
-        self._theme_btn.setCursor(Qt.PointingHandCursor)
-        self._theme_btn.clicked.connect(self._toggle_theme)
-        self._theme_btn.setStyleSheet(self._theme_btn_style())
-        left_layout.addWidget(self._theme_btn)
-
         self._ctrl = ControlPanel(
             on_change=lambda: self._debounce.start(),
             on_cam_params=self._open_cam_params,
         )
-        left_layout.addWidget(self._ctrl)
-        root.addWidget(left_col)
+        root.addWidget(self._ctrl)
 
         self._tabs = QTabWidget()
         self._tabs.setStyleSheet(self._tab_style())
@@ -60,8 +47,58 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._v2d, "2D View")
         root.addWidget(self._tabs, 1)
 
+        self._geo = None
+        self._build_menu()
         self._apply_palette()
         self._refresh()
+
+    def _build_menu(self):
+        mb = self.menuBar()
+        fm = mb.addMenu("File")
+        fm.addAction("Save Config…",  self._save_config)
+        fm.addAction("Load Config…",  self._load_config)
+        fm.addSeparator()
+        fm.addAction("Export 2D View…", lambda: self._v2d.save_image(self, self._geo, CAMERA_MODEL))
+        fm.addAction("Export 3D View…", lambda: self._gl.save_image(self, self._geo, CAMERA_MODEL))
+
+    def _save_config(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save Configuration", "fov_config.json",
+            "JSON Files (*.json)")
+        if not path:
+            return
+        pr = self._ctrl.get_params()
+        cfg = {
+            "focal_mm":       pr["f"],
+            "height_m":       pr["H"],
+            "target_dist_m":  pr["tgt_d"],
+            "target_h_m":     pr["tgt_h"],
+            "bearing_deg":    pr["bearing"],
+            "camera_model":   dict(CAMERA_MODEL),
+        }
+        with open(path, "w") as fh:
+            json.dump(cfg, fh, indent=2)
+
+    def _load_config(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Load Configuration", "",
+            "JSON Files (*.json)")
+        if not path:
+            return
+        with open(path) as fh:
+            cfg = json.load(fh)
+        s = self._ctrl._sliders
+        if "focal_mm"      in cfg: s["focal"].setValue(  int(cfg["focal_mm"]      * 10))
+        if "height_m"      in cfg: s["height"].setValue( int(cfg["height_m"]      * 10))
+        if "target_dist_m" in cfg: s["tgt_d"].setValue(  int(cfg["target_dist_m"] * 10))
+        if "target_h_m"    in cfg: s["tgt_h"].setValue(  int(cfg["target_h_m"]    * 10))
+        if "bearing_deg"   in cfg: s["bearing"].setValue(int(cfg["bearing_deg"]))
+        if "camera_model"  in cfg:
+            CAMERA_MODEL.update(cfg["camera_model"])
+            self._ctrl.refresh_model_label()
+            self._ctrl.refresh_focal_slider()
+            self._ctrl.refresh_fov_label()
+        self._debounce.start()
 
     def _tab_style(self):
         return f"""
@@ -82,21 +119,6 @@ class MainWindow(QMainWindow):
                 background:{TH('bg')}; color:{TH('text')};
             }}
         """
-
-    def _theme_btn_style(self):
-        return (f"QPushButton{{background:{TH('accent')};color:#ffffff;"
-                f"border:none;border-radius:4px;padding:4px 12px;"
-                f"font-size:11px;font-weight:bold;}}"
-                f"QPushButton:hover{{background:{TH('accent2')};}}")
-
-    def _toggle_theme(self):
-        _theme.DARK_MODE = not _theme.DARK_MODE
-        self._theme_btn.setText("☀  Light Mode" if _theme.DARK_MODE else "🌙  Dark Mode")
-        self._apply_palette()
-        self._theme_btn.setStyleSheet(self._theme_btn_style())
-        self._ctrl._rebuild_styles()
-        self._tabs.setStyleSheet(self._tab_style())
-        self._v2d.update()
 
     def _apply_palette(self):
         app = QApplication.instance()
@@ -122,12 +144,14 @@ class MainWindow(QMainWindow):
             CAMERA_MODEL.update(dlg.get_model())
             self._ctrl.refresh_model_label()
             self._ctrl.refresh_focal_slider()
+            self._ctrl.refresh_fov_label()
             self._debounce.start()
 
     def _refresh(self):
         pr = self._ctrl.get_params()
         geo, warn = compute_geometry(
             pr["f"], pr["H"], pr["tgt_d"], pr["tgt_h"], CAMERA_MODEL)
+        self._geo = geo
         self._ctrl.update_stats(geo, warn)
         if geo:
             self._gl.set_geometry(geo, pr["bearing"])
